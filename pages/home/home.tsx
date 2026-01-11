@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import { Story } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { Storage } from "@/lib/storage";
+import { Toaster } from "@/components/ui/sonner";
 
 export default function Home() {
   const [stories, setStories] = useState<Story[]>([]);

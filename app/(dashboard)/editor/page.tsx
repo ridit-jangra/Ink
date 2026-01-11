@@ -2,6 +2,7 @@
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { EditorComponent } from "@/components/editor-component";
+import { Toaster } from "@/components/ui/sonner";
 import {
   SidebarInset,
   SidebarProvider,
@@ -64,7 +65,6 @@ export default function EditorPage() {
       router.push(`/editor?id=${story.id}`);
     } catch (error) {
       console.error("Error saving story:", error);
-      alert("Failed to save story. Please try again.");
     }
   };
 
@@ -75,10 +75,8 @@ export default function EditorPage() {
       Storage.setItem("stories", filteredStories);
       loadStories();
       router.push("/");
-      alert("Story deleted successfully!");
     } catch (error) {
       console.error("Error deleting story:", error);
-      alert("Failed to delete story. Please try again.");
     }
   };
 
