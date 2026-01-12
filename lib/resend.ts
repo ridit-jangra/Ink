@@ -1,19 +1,33 @@
+// app/api/otp/send/route.js (or .ts)
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+// ✅ LAZY INITIALIZATION - Only create when API key exists
+let resend: Resend | null = null;
+
+function getResend() {
+  if (!resend && process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 export async function sendOTP(email: string, otp: string) {
   console.log("🔍 Resend Debug - Starting email send...");
   console.log("📧 To:", email);
   console.log("🔢 OTP:", otp);
-  console.log(
-    "🔑 API Key exists:",
-    !!process.env.RESEND_API_KEY ? "YES" : "NO"
-  );
-  console.log("📨 From domain verified:", "ink.ridit.space"); // TODO: check status
+
+  // ✅ CHECK API KEY BEFORE USING
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY environment variable is not configured");
+  }
+
+  const resendInstance = getResend();
+  if (!resendInstance) {
+    throw new Error("Resend client could not be initialized");
+  }
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await resendInstance.emails.send({
       from: "Ink <no-reply@ink.ridit.space>",
       to: [email],
       subject: "Your Ink Verification Code",
@@ -28,7 +42,6 @@ export async function sendOTP(email: string, otp: string) {
 
     if (error) {
       console.error("❌ Resend RAW ERROR:", JSON.stringify(error, null, 2));
-
       throw new Error(
         `Resend error: ${error.message || JSON.stringify(error)}`
       );
