@@ -29,8 +29,8 @@ export default function Home() {
       try {
         const authenticated = AuthService.isAuthenticated();
 
-        if (authenticated) {
-          router.push("/dashboard");
+        if (!authenticated) {
+          router.push("/login");
         }
       } catch (error) {}
     };
