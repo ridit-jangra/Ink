@@ -2,22 +2,22 @@
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { EditorComponent } from "@/components/editor-component";
-import { Toaster } from "@/components/ui/sonner";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Book } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Story } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Storage } from "@/lib/storage";
 
-export default function EditorPage() {
+function EditorContent() {
   const [stories, setStories] = useState<Story[]>([]);
   const [currentStory, setCurrentStory] = useState<Story | null>(null);
   const [loading, setLoading] = useState(true);
+
   const router = useRouter();
   const searchParams = useSearchParams()!;
   const storyId = searchParams.get("id");
@@ -27,7 +27,7 @@ export default function EditorPage() {
   }, []);
 
   useEffect(() => {
-    if (storyId && stories.length > 0) {
+    if (storyId && stories?.length > 0) {
       const story = stories.find((s) => s.id === storyId);
       if (story) {
         setCurrentStory(story);
@@ -40,10 +40,13 @@ export default function EditorPage() {
   const loadStories = () => {
     try {
       const loadedStories = Storage.getItem<Story[]>("stories") || [];
-      loadedStories.sort((a, b) => b.updatedAt - a.updatedAt);
-      setStories(loadedStories);
+      const typedStories: Story[] = loadedStories.sort(
+        (a, b) => b.updatedAt - a.updatedAt
+      );
+      setStories(typedStories);
     } catch (error) {
       console.log("No stories found or error loading:", error);
+      setStories([]);
     } finally {
       setLoading(false);
     }
@@ -81,11 +84,11 @@ export default function EditorPage() {
   };
 
   const handleNewStory = () => {
-    router.push("/editor");
+    router.replace("/editor");
   };
 
   const handleSelectStory = (story: Story) => {
-    router.push(`/editor?id=${story.id}`);
+    router.replace(`/editor?id=${story.id}`);
   };
 
   if (loading) {
@@ -105,19 +108,35 @@ export default function EditorPage() {
         onSelectStory={handleSelectStory}
       />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+        <header className="flex min-h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-2">
             <Book className="h-5 w-5" />
             <span className="font-semibold">Story Editor</span>
           </div>
         </header>
-        <EditorComponent
-          currentStory={currentStory}
-          onSave={handleSaveStory}
-          onDelete={handleDeleteStory}
-        />
+        <div className="flex-1 overflow-auto">
+          <EditorComponent
+            currentStory={currentStory}
+            onSave={handleSaveStory}
+            onDelete={handleDeleteStory}
+          />
+        </div>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+export default function EditorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-screen ">
+          <div>Loading editor...</div>
+        </div>
+      }
+    >
+      <EditorContent />
+    </Suspense>
   );
 }

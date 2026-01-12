@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Story } from "@/lib/types";
 import { NavStories } from "./nav-stories";
+import { useRouter } from "next/navigation";
 
 export function AppSidebar({
   stories,
@@ -22,8 +23,15 @@ export function AppSidebar({
   stories: Story[];
   onNewStory: () => void;
   currentStoryId: string | null;
-  onSelectStory?: (story: Story) => void;
+  onSelectStory: (story: Story) => void;
 }) {
+  const router = useRouter();
+
+  const handleNavigation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.replace("/dashboard");
+  };
+
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
@@ -38,10 +46,10 @@ export function AppSidebar({
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <a href="/">
+                <span onClick={handleNavigation}>
                   <Book className="h-4 w-4" />
                   <span>View Stories</span>
-                </a>
+                </span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

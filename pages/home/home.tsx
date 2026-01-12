@@ -12,7 +12,6 @@ import { useState, useEffect } from "react";
 import { Story } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { Storage } from "@/lib/storage";
-import { Toaster } from "@/components/ui/sonner";
 
 export default function Home() {
   const [stories, setStories] = useState<Story[]>([]);
@@ -36,11 +35,11 @@ export default function Home() {
   };
 
   const handleNewStory = () => {
-    router.push("/editor");
+    router.replace("/editor");
   };
 
   const handleSelectStory = (story: Story) => {
-    router.push(`/editor?id=${story.id}`);
+    router.replace(`/editor?id=${story.id}`);
   };
 
   if (loading) {
@@ -57,6 +56,7 @@ export default function Home() {
         stories={stories}
         onNewStory={handleNewStory}
         currentStoryId={null}
+        onSelectStory={handleSelectStory}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">

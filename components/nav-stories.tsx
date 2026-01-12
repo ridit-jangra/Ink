@@ -17,7 +17,7 @@ export function NavStories({
 }: {
   stories: Story[];
   currentStoryId: string | null;
-  onSelectStory?: (story: Story) => void;
+  onSelectStory: (story: Story) => void;
 }) {
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -26,7 +26,7 @@ export function NavStories({
         {stories.slice(0, 10).map((story) => (
           <SidebarMenuItem key={story.id}>
             <SidebarMenuButton
-              onClick={() => onSelectStory?.(story)}
+              onClick={() => onSelectStory(story)}
               isActive={currentStoryId === story.id}
             >
               <Book className="h-4 w-4" />

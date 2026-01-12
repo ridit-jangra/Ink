@@ -20,17 +20,37 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   TagsInput,
   TagsInputInput,
   TagsInputItem,
   TagsInputList,
 } from "@/components/ui/tags-input";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView, Theme } from "@blocknote/mantine";
-import { Upload, Save, Trash2, CheckCircle2, Circle } from "lucide-react";
+import {
+  Upload,
+  Save,
+  Trash2,
+  CheckCircle2,
+  Circle,
+  Plus,
+  MoreHorizontal,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Story } from "@/lib/types";
+import { Sheet, Story } from "@/lib/types";
 import Image from "next/image";
 
 const darkRedTheme = {
@@ -50,45 +70,124 @@ export function EditorComponent({
   onSave: (story: Story) => void;
   onDelete: (id: string) => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [isSaved, setIsSaved] = useState(true);
+  const [sheets, setSheets] = useState<Sheet[]>([
+    {
+      id: "sheet_1",
+      title: "",
+      subtitle: "",
+      tags: [],
+      content: [],
+      isSaved: true,
+    },
+  ]);
+  const [currentSheetIndex, setCurrentSheetIndex] = useState(0);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [sheetToDelete, setSheetToDelete] = useState<string | null>(null);
+  const [visibleSheets, setVisibleSheets] = useState<number[]>([]);
+  const [overflowSheets, setOverflowSheets] = useState<number[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const editor = useCreateBlockNote({ animations: true });
+
+  const currentSheet = sheets[currentSheetIndex];
 
   useEffect(() => {
     if (currentStory) {
-      setTitle(currentStory.title);
-      setSubtitle(currentStory.subtitle);
-      setTags(currentStory.tags);
-      if (currentStory.content) {
-        editor.replaceBlocks(editor.document, currentStory.content);
+      if (currentStory.sheets && currentStory.sheets.length > 0) {
+        setSheets(
+          currentStory.sheets.map((sheet) => ({ ...sheet, isSaved: true }))
+        );
+        setCurrentSheetIndex(0);
+        if (currentStory.sheets[0].content) {
+          editor.replaceBlocks(editor.document, currentStory.sheets[0].content);
+        }
+      } else {
+        const newSheets = [
+          {
+            id: "sheet_1",
+            title: currentStory.title,
+            subtitle: currentStory.subtitle,
+            tags: currentStory.tags,
+            content: currentStory.content || [],
+            isSaved: true,
+          },
+        ];
+        setSheets(newSheets);
+        setCurrentSheetIndex(0);
+        if (currentStory.content) {
+          editor.replaceBlocks(editor.document, currentStory.content);
+        }
       }
-      setIsSaved(true);
-    } else {
-      setTitle("");
-      setSubtitle("");
-      setTags([]);
-      editor.replaceBlocks(editor.document, []);
-      setIsSaved(true);
     }
   }, [currentStory?.id]);
 
+  useEffect(() => {
+    if (currentSheet) {
+      editor.replaceBlocks(editor.document, currentSheet.content);
+    }
+  }, [currentSheetIndex]);
+
+  useEffect(() => {
+    const calculateVisibleSheets = () => {
+      if (!containerRef.current) return;
+
+      const containerWidth = containerRef.current.offsetWidth;
+      const buttonWidth = 150; // Approximate width per button
+      const dropdownWidth = 50; // Width for dropdown button
+      const addButtonWidth = 50; // Width for add button
+
+      const availableWidth =
+        containerWidth - dropdownWidth - addButtonWidth - 32; // 32px for padding
+      const maxVisible = Math.floor(availableWidth / buttonWidth);
+
+      const visible = sheets
+        .slice(0, Math.max(1, maxVisible))
+        .map((_, idx) => idx);
+      const overflow = sheets
+        .slice(visible.length)
+        .map((_, idx) => idx + visible.length);
+
+      setVisibleSheets(visible);
+      setOverflowSheets(overflow);
+    };
+
+    calculateVisibleSheets();
+    window.addEventListener("resize", calculateVisibleSheets);
+    return () => window.removeEventListener("resize", calculateVisibleSheets);
+  }, [sheets.length]);
+
+  const updateCurrentSheet = (updates: Partial<Sheet>) => {
+    setSheets((prev) =>
+      prev.map((sheet, idx) =>
+        idx === currentSheetIndex
+          ? { ...sheet, ...updates, isSaved: false }
+          : sheet
+      )
+    );
+  };
+
   const handleSave = () => {
-    const content = editor.document;
+    const updatedSheets = sheets.map((sheet, idx) =>
+      idx === currentSheetIndex
+        ? { ...sheet, content: editor.document, isSaved: true }
+        : { ...sheet, isSaved: true }
+    );
+    setSheets(updatedSheets);
+
+    const firstSheet = updatedSheets[0];
+
     const story: Story = {
       id: currentStory?.id || `story_${Date.now()}`,
-      title: title || "Untitled Story",
-      subtitle: subtitle || "",
-      content,
-      tags,
+      title: firstSheet.title || "Untitled Story",
+      subtitle: firstSheet.subtitle || "",
+      content: firstSheet.content,
+      tags: firstSheet.tags,
       coverImage: "/assets/cover-image.png",
+      sheets: updatedSheets,
       createdAt: currentStory?.createdAt || Date.now(),
       updatedAt: Date.now(),
     };
     onSave(story);
-    setIsSaved(true);
     toast("Story saved successfully!");
   };
 
@@ -100,6 +199,37 @@ export function EditorComponent({
         description: "Your story has been deleted.",
       });
     }
+  };
+
+  const handleAddSheet = () => {
+    const newSheet: Sheet = {
+      id: `sheet_${Date.now()}`,
+      title: "",
+      subtitle: "",
+      tags: [],
+      content: [],
+      isSaved: true,
+    };
+    setSheets((prev) => [...prev, newSheet]);
+    setCurrentSheetIndex(sheets.length);
+    editor.replaceBlocks(editor.document, []);
+    toast.success("New sheet added");
+  };
+
+  const handleDeleteSheet = (sheetId: string) => {
+    if (sheets.length === 1) {
+      toast.error("Cannot delete the last sheet");
+      return;
+    }
+
+    const sheetIndex = sheets.findIndex((s) => s.id === sheetId);
+    setSheets((prev) => prev.filter((s) => s.id !== sheetId));
+
+    if (currentSheetIndex >= sheets.length - 1) {
+      setCurrentSheetIndex(Math.max(0, sheets.length - 2));
+    }
+
+    toast.success("Sheet deleted");
   };
 
   const handleImageUpload = () => {
@@ -118,24 +248,128 @@ export function EditorComponent({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [title, subtitle, tags, currentStory, editor]);
+  }, [sheets, currentSheetIndex, currentStory, editor]);
 
   useEffect(() => {
     editor.onChange(() => {
-      setIsSaved(false);
+      updateCurrentSheet({ content: editor.document });
     });
-  }, [editor]);
+  }, [editor, currentSheetIndex]);
+
+  const switchToSheet = (idx: number) => {
+    const updatedSheets = sheets.map((s, i) =>
+      i === currentSheetIndex ? { ...s, content: editor.document } : s
+    );
+    setSheets(updatedSheets);
+    setCurrentSheetIndex(idx);
+  };
 
   return (
     <>
-      <div className="flex w-full bg-background text-foreground gap-8 p-4 max-h-[calc(100vh-4rem)] flex-1 px-8">
-        <div className="relative flex flex-col bg-[#171717] w-[75%] rounded-[46px] p-4">
+      <div className="flex w-full bg-background text-foreground gap-8 p-4 min-h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] flex-1 px-8 overflow-x-hidden">
+        <div className="flex flex-col bg-[#171717] w-[75%] min-w-0 rounded-[46px] p-4 gap-4 overflow-hidden">
           <div className="bg-background w-full flex-1 rounded-[46px] overflow-hidden">
             <ScrollArea className="h-full w-full">
               <div className="p-4">
                 <BlockNoteView editor={editor} theme={darkRedTheme} />
               </div>
             </ScrollArea>
+          </div>
+          <div className="w-full overflow-hidden px-8 pb-2" ref={containerRef}>
+            <div className="flex items-center gap-2 justify-center">
+              {visibleSheets.map((idx) => (
+                <ContextMenu key={sheets[idx].id}>
+                  <ContextMenuTrigger>
+                    <Button
+                      variant={
+                        idx === currentSheetIndex ? "default" : "outline"
+                      }
+                      className={`relative p-4 rounded-2xl transition-all ${
+                        idx === currentSheetIndex
+                          ? "bg-primary text-primary-foreground shadow-lg scale-105"
+                          : "bg-background hover:bg-accent"
+                      }`}
+                      onClick={() => switchToSheet(idx)}
+                    >
+                      <span className="font-semibold">
+                        {sheets[idx].title || `Sheet ${idx + 1}`}
+                      </span>
+                      {!sheets[idx].isSaved && (
+                        <span className="absolute -top-1 -right-1 h-3 w-3 bg-yellow-500 rounded-full border-2 border-background" />
+                      )}
+                    </Button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem onClick={() => switchToSheet(idx)}>
+                      Select Sheet
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() => {
+                        setSheetToDelete(sheets[idx].id);
+                        setShowDeleteDialog(true);
+                      }}
+                      className="text-destructive"
+                    >
+                      Delete Sheet
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              ))}
+
+              {overflowSheets.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="p-4 rounded-2xl">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {overflowSheets.map((idx) => (
+                      <ContextMenu key={sheets[idx].id}>
+                        <ContextMenuTrigger>
+                          <DropdownMenuItem
+                            onClick={() => switchToSheet(idx)}
+                            className={
+                              idx === currentSheetIndex ? "bg-accent" : ""
+                            }
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            <span className="flex items-center gap-2">
+                              {sheets[idx].title || `Sheet ${idx + 1}`}
+                              {!sheets[idx].isSaved && (
+                                <span className="h-2 w-2 bg-yellow-500 rounded-full" />
+                              )}
+                            </span>
+                          </DropdownMenuItem>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem onClick={() => switchToSheet(idx)}>
+                            Select Sheet
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onClick={() => {
+                              setSheetToDelete(sheets[idx].id);
+                              setShowDeleteDialog(true);
+                            }}
+                            className="text-destructive"
+                          >
+                            Delete Sheet
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <Button
+                variant="outline"
+                className="p-4 rounded-2xl"
+                onClick={handleAddSheet}
+              >
+                <Plus style={{ height: "18px", width: "auto" }} />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -147,22 +381,23 @@ export function EditorComponent({
                   type="text"
                   placeholder="Title"
                   className="scroll-m-20 text-4xl font-bold font-employed tracking-tight bg-transparent border-none outline-none flex-1 w-12"
-                  value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    setIsSaved(false);
-                  }}
+                  value={currentSheet.title}
+                  onChange={(e) =>
+                    updateCurrentSheet({ title: e.target.value })
+                  }
                 />
                 <Tooltip>
                   <TooltipTrigger>
-                    {isSaved ? (
+                    {currentSheet.isSaved ? (
                       <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0" />
                     ) : (
                       <Circle className="h-6 w-6 text-yellow-500 shrink-0" />
                     )}
                   </TooltipTrigger>
                   <TooltipContent>
-                    {isSaved ? "All changes saved" : "Unsaved changes"}
+                    {currentSheet.isSaved
+                      ? "All changes saved"
+                      : "Unsaved changes"}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -170,11 +405,10 @@ export function EditorComponent({
                 type="text"
                 placeholder="Subtitle"
                 className="text-muted-foreground text-xl font-semibold tracking-tight bg-transparent border-none outline-none"
-                value={subtitle}
-                onChange={(e) => {
-                  setSubtitle(e.target.value);
-                  setIsSaved(false);
-                }}
+                value={currentSheet.subtitle}
+                onChange={(e) =>
+                  updateCurrentSheet({ subtitle: e.target.value })
+                }
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -205,17 +439,16 @@ export function EditorComponent({
                   Tags
                 </p>
                 <TagsInput
-                  value={tags}
-                  onValueChange={(newTags) => {
-                    setTags(newTags);
-                    setIsSaved(false);
-                  }}
+                  value={currentSheet.tags}
+                  onValueChange={(newTags) =>
+                    updateCurrentSheet({ tags: newTags })
+                  }
                   editable
                   addOnPaste
                   className="mt-4 w-full"
                 >
                   <TagsInputList className="border-0 focus-within:ring-0 gap-3 w-full">
-                    {tags.map((tag) => (
+                    {currentSheet.tags.map((tag) => (
                       <TagsInputItem
                         key={tag}
                         value={tag}
@@ -236,11 +469,7 @@ export function EditorComponent({
           <div className="flex items-center justify-between w-full gap-3">
             <Tooltip>
               <TooltipTrigger className="w-full">
-                <Button
-                  variant={"secondary"}
-                  className="w-full gap-2"
-                  onClick={handleSave}
-                >
+                <Button className="w-full gap-2" onClick={handleSave}>
                   <Save className="h-4 w-4" />
                   Save Story
                 </Button>
@@ -253,7 +482,10 @@ export function EditorComponent({
                   <Button
                     variant={"destructive"}
                     className="w-full gap-2"
-                    onClick={() => setShowDeleteDialog(true)}
+                    onClick={() => {
+                      setSheetToDelete(null);
+                      setShowDeleteDialog(true);
+                    }}
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete Story
@@ -271,14 +503,25 @@ export function EditorComponent({
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your
-              story "{title || "Untitled Story"}".
+              {sheetToDelete
+                ? `This will permanently delete this sheet. This action cannot be undone.`
+                : `This action cannot be undone. This will permanently delete your story "${
+                    currentSheet.title || "Untitled Story"
+                  }".`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={() => {
+                if (sheetToDelete) {
+                  handleDeleteSheet(sheetToDelete);
+                  setSheetToDelete(null);
+                } else {
+                  handleDelete();
+                }
+                setShowDeleteDialog(false);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
