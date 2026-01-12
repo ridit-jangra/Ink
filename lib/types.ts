@@ -25,7 +25,7 @@ export interface User {
   email: string;
   password: string;
   gender: "Female" | "Male";
-  isVerified?: boolean; // ← NEW
-  otp?: string; // ← NEW
-  otpExpiry?: Date; // ← NEW
+  isVerified?: boolean;
+  otp?: string;
+  otpExpiry?: Date;
 }

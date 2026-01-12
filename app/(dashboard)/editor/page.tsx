@@ -29,7 +29,6 @@ function EditorContent() {
     setIsClient(true);
   }, []);
 
-  // Combined auth check and user fetch
   useEffect(() => {
     if (!isClient) return;
 
@@ -53,14 +52,13 @@ function EditorContent() {
     initializeAuth();
   }, [isClient, router]);
 
-  // Load stories after auth is complete
   useEffect(() => {
     if (!isClient || !user) return;
     loadStories();
   }, [isClient, user]);
 
   useEffect(() => {
-    if (storyId && stories?.length > 0) {
+    if (storyId && stories.length > 0) {
       const story = stories.find((s) => s.id === storyId);
       if (story) {
         if (
@@ -74,7 +72,7 @@ function EditorContent() {
     } else if (!storyId && currentStory) {
       setCurrentStory(null);
     }
-  }, [storyId, stories]);
+  }, [storyId, stories, currentStory]);
 
   const loadStories = async () => {
     try {

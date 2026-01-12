@@ -83,8 +83,8 @@ export class Storage {
     defaultValue?: T
   ): Promise<T | null> {
     try {
-      const studentId = await this.getUserId();
-      const docRef = doc(db, collectionName, studentId, "items", key);
+      const userId = await this.getUserId();
+      const docRef = doc(db, collectionName, userId, "items", key);
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {

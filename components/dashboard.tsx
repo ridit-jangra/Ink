@@ -8,39 +8,49 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Book } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Story, User } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { Storage } from "@/lib/storage";
 import { AuthService } from "@/lib/authService";
 
-export default function Home() {
+export default function Dashboard() {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
   const router = useRouter();
 
-  if (authLoading) {
-    if (!AuthService.isAuthenticated()) {
-      router.push("/login");
-      return null;
-    }
-    setAuthLoading(false);
-  }
-
   useEffect(() => {
-    const getUser = async () => {
-      const user = await AuthService.getCurrentUser();
-      setUser(user);
+    setIsClient(true);
+  }, []);
+
+  // Handle auth check and user fetch
+  useEffect(() => {
+    if (!isClient) return;
+
+    const initializeAuth = async () => {
+      if (!AuthService.isAuthenticated()) {
+        router.push("/login");
+        return;
+      }
+
+      try {
+        const currentUser = await AuthService.getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        router.push("/login");
+      }
     };
 
-    getUser();
-  }, []);
+    initializeAuth();
+  }, [isClient, router]);
 
   useEffect(() => {
+    if (!isClient || !user) return;
     loadStories();
-  }, []);
+  }, [isClient, user]);
 
   const loadStories = async () => {
     try {
@@ -76,7 +86,7 @@ export default function Home() {
     }
   };
 
-  if (loading) {
+  if (!isClient || loading || !user) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-xl">Loading...</div>
@@ -91,7 +101,7 @@ export default function Home() {
         onNewStory={handleNewStory}
         currentStoryId={null}
         onSelectStory={handleSelectStory}
-        user={user!}
+        user={user}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
