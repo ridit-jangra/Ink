@@ -109,7 +109,6 @@ export function EditorComponent({
   const [draggedSheet, setDraggedSheet] = useState<number | null>(null);
   const [dragOverSheet, setDragOverSheet] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const isSwitchingRef = useRef<boolean>(false);
   const editorInstancesRef = useRef<Map<string, any>>(new Map());
 

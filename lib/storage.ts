@@ -23,7 +23,7 @@ export class Storage {
   private static async getUserId(): Promise<string> {
     const user = await AuthService.getCurrentUser();
     if (!user) {
-      throw new Error("User not logged in. Please login first.");
+      return Promise.reject("User not authenticated");
     }
     return user.id;
   }

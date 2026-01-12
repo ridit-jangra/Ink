@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Book } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { Story } from "@/lib/types";
+import { Story, User } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { Storage } from "@/lib/storage";
 import { AuthService } from "@/lib/authService";
@@ -17,36 +17,26 @@ import { AuthService } from "@/lib/authService";
 export default function Home() {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const router = useRouter();
-  const hasCheckedAuth = useRef(false);
+
+  if (authLoading) {
+    if (!AuthService.isAuthenticated()) {
+      router.push("/login");
+      return null;
+    }
+    setAuthLoading(false);
+  }
 
   useEffect(() => {
-    if (hasCheckedAuth.current) return;
-
-    let handlePopState: (() => void) | null = null;
-
-    const checkAuth = async () => {
-      try {
-        const authenticated = AuthService.isAuthenticated();
-
-        if (!authenticated) {
-          router.push("/login");
-        }
-      } catch (error) {}
+    const getUser = async () => {
+      const user = await AuthService.getCurrentUser();
+      setUser(user);
     };
 
-    const timeoutId = setTimeout(() => {
-      hasCheckedAuth.current = true;
-      checkAuth();
-    }, 1000);
-
-    return () => {
-      clearTimeout(timeoutId);
-      if (handlePopState) {
-        window.removeEventListener("popstate", handlePopState);
-      }
-    };
-  }, [router]);
+    getUser();
+  }, []);
 
   useEffect(() => {
     loadStories();
@@ -101,6 +91,7 @@ export default function Home() {
         onNewStory={handleNewStory}
         currentStoryId={null}
         onSelectStory={handleSelectStory}
+        user={user!}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">

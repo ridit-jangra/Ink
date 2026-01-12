@@ -4,26 +4,30 @@ import { Plus, Book } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Story } from "@/lib/types";
+import { Story, User } from "@/lib/types";
 import { NavStories } from "./nav-stories";
 import { useRouter } from "next/navigation";
+import { NavUser } from "./nav-user";
 
 export function AppSidebar({
   stories,
   onNewStory,
   currentStoryId,
   onSelectStory,
+  user,
 }: {
   stories: Story[];
   onNewStory: () => void;
   currentStoryId: string | null;
   onSelectStory: (story: Story) => void;
+  user: User;
 }) {
   const router = useRouter();
 
@@ -61,6 +65,9 @@ export function AppSidebar({
           onSelectStory={onSelectStory}
         />
       </SidebarContent>
+      <SidebarFooter>
+        <NavUser user={user} />
+      </SidebarFooter>
     </Sidebar>
   );
 }

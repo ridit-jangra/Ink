@@ -16,7 +16,6 @@ export async function sendOTP(email: string, otp: string) {
   console.log("📧 To:", email);
   console.log("🔢 OTP:", otp);
 
-  // ✅ CHECK API KEY BEFORE USING
   if (!process.env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY environment variable is not configured");
   }
@@ -28,7 +27,7 @@ export async function sendOTP(email: string, otp: string) {
 
   try {
     const { data, error } = await resendInstance.emails.send({
-      from: "Ink <no-reply@ink.ridit.space>",
+      from: "Ink <no-reply@ridit.space>",
       to: [email],
       subject: "Your Ink Verification Code",
       html: `

@@ -8,8 +8,8 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Book } from "lucide-react";
-import { Suspense, useEffect, useRef, useState } from "react";
-import { Story } from "@/lib/types";
+import { Suspense, useEffect, useState } from "react";
+import { Story, User } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Storage } from "@/lib/storage";
 import { AuthService } from "@/lib/authService";
@@ -18,43 +18,46 @@ function EditorContent() {
   const [stories, setStories] = useState<Story[]>([]);
   const [currentStory, setCurrentStory] = useState<Story | null>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   const router = useRouter();
   const searchParams = useSearchParams()!;
   const storyId = searchParams.get("id");
-  const hasCheckedAuth = useRef(false);
 
   useEffect(() => {
-    if (hasCheckedAuth.current) return;
+    setIsClient(true);
+  }, []);
 
-    let handlePopState: (() => void) | null = null;
+  // Combined auth check and user fetch
+  useEffect(() => {
+    if (!isClient) return;
 
-    const checkAuth = async () => {
+    const initializeAuth = async () => {
+      if (!AuthService.isAuthenticated()) {
+        router.push("/login");
+        return;
+      }
+
       try {
-        const authenticated = AuthService.isAuthenticated();
-
-        if (!authenticated) {
-          router.push("/login");
-        }
-      } catch (error) {}
-    };
-
-    const timeoutId = setTimeout(() => {
-      hasCheckedAuth.current = true;
-      checkAuth();
-    }, 1000);
-
-    return () => {
-      clearTimeout(timeoutId);
-      if (handlePopState) {
-        window.removeEventListener("popstate", handlePopState);
+        const currentUser = await AuthService.getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        router.push("/login");
+      } finally {
+        setLoading(false);
       }
     };
-  }, [router]);
 
+    initializeAuth();
+  }, [isClient, router]);
+
+  // Load stories after auth is complete
   useEffect(() => {
+    if (!isClient || !user) return;
     loadStories();
-  }, []);
+  }, [isClient, user]);
 
   useEffect(() => {
     if (storyId && stories?.length > 0) {
@@ -84,8 +87,6 @@ function EditorContent() {
     } catch (error) {
       console.log("No stories found or error loading:", error);
       setStories([]);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -139,7 +140,7 @@ function EditorContent() {
     router.replace(`/editor?id=${story.id}`);
   };
 
-  if (loading) {
+  if (loading || !isClient || !user) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-xl">Loading...</div>
@@ -154,6 +155,7 @@ function EditorContent() {
         onNewStory={handleNewStory}
         currentStoryId={currentStory?.id || null}
         onSelectStory={handleSelectStory}
+        user={user}
       />
       <SidebarInset>
         <header className="flex min-h-16 shrink-0 items-center gap-2 border-b px-4">
