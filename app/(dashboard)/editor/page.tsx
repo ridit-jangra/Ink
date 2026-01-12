@@ -8,10 +8,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Book } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Story } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Storage } from "@/lib/storage";
+import { AuthService } from "@/lib/authService";
 
 function EditorContent() {
   const [stories, setStories] = useState<Story[]>([]);
@@ -21,6 +22,35 @@ function EditorContent() {
   const router = useRouter();
   const searchParams = useSearchParams()!;
   const storyId = searchParams.get("id");
+  const hasCheckedAuth = useRef(false);
+
+  useEffect(() => {
+    if (hasCheckedAuth.current) return;
+
+    let handlePopState: (() => void) | null = null;
+
+    const checkAuth = async () => {
+      try {
+        const authenticated = AuthService.isAuthenticated();
+
+        if (authenticated) {
+          router.push("/dashboard");
+        }
+      } catch (error) {}
+    };
+
+    const timeoutId = setTimeout(() => {
+      hasCheckedAuth.current = true;
+      checkAuth();
+    }, 1000);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (handlePopState) {
+        window.removeEventListener("popstate", handlePopState);
+      }
+    };
+  }, [router]);
 
   useEffect(() => {
     loadStories();
@@ -30,18 +60,25 @@ function EditorContent() {
     if (storyId && stories?.length > 0) {
       const story = stories.find((s) => s.id === storyId);
       if (story) {
-        setCurrentStory(story);
+        if (
+          !currentStory ||
+          currentStory.id !== story.id ||
+          currentStory.updatedAt !== story.updatedAt
+        ) {
+          setCurrentStory(story);
+        }
       }
-    } else {
+    } else if (!storyId && currentStory) {
       setCurrentStory(null);
     }
   }, [storyId, stories]);
 
-  const loadStories = () => {
+  const loadStories = async () => {
     try {
-      const loadedStories = Storage.getItem<Story[]>("stories") || [];
+      const loadedStories =
+        (await Storage.getItem<Story[]>("stories", "stories")) || [];
       const typedStories: Story[] = loadedStories.sort(
-        (a, b) => b.updatedAt - a.updatedAt
+        (a: Story, b: Story) => b.updatedAt - a.updatedAt
       );
       setStories(typedStories);
     } catch (error) {
@@ -52,10 +89,13 @@ function EditorContent() {
     }
   };
 
-  const handleSaveStory = (story: Story) => {
+  const handleSaveStory = async (story: Story) => {
     try {
-      const existingStories = Storage.getItem<Story[]>("stories") || [];
-      const storyIndex = existingStories.findIndex((s) => s.id === story.id);
+      const existingStories =
+        (await Storage.getItem<Story[]>("stories", "stories")) || [];
+      const storyIndex = existingStories.findIndex(
+        (s: Story) => s.id === story.id
+      );
 
       if (storyIndex >= 0) {
         existingStories[storyIndex] = story;
@@ -63,19 +103,27 @@ function EditorContent() {
         existingStories.push(story);
       }
 
-      Storage.setItem("stories", existingStories);
-      loadStories();
-      router.push(`/editor?id=${story.id}`);
+      await Storage.setItem("stories", "stories", existingStories);
+
+      setStories(
+        existingStories.sort((a: Story, b: Story) => b.updatedAt - a.updatedAt)
+      );
+      setCurrentStory(story);
+
+      if (!storyId) {
+        router.push(`/editor?id=${story.id}`);
+      }
     } catch (error) {
       console.error("Error saving story:", error);
     }
   };
 
-  const handleDeleteStory = (id: string) => {
+  const handleDeleteStory = async (id: string) => {
     try {
-      const existingStories = Storage.getItem<Story[]>("stories") || [];
-      const filteredStories = existingStories.filter((s) => s.id !== id);
-      Storage.setItem("stories", filteredStories);
+      const existingStories =
+        (await Storage.getItem<Story[]>("stories", "stories")) || [];
+      const filteredStories = existingStories.filter((s: Story) => s.id !== id);
+      await Storage.setItem("stories", "stories", filteredStories);
       loadStories();
       router.push("/");
     } catch (error) {
@@ -115,7 +163,7 @@ function EditorContent() {
             <span className="font-semibold">Story Editor</span>
           </div>
         </header>
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto max-w-full">
           <EditorComponent
             currentStory={currentStory}
             onSave={handleSaveStory}

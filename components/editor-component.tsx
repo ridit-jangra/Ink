@@ -5,6 +5,11 @@ import "@blocknote/mantine/style.css";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -110,12 +115,10 @@ export function EditorComponent({
 
   const currentSheet = sheets[currentSheetIndex];
 
-  // Create editor instance once without initial content
   const editor = useCreateBlockNote({
     animations: true,
   });
 
-  // Load initial content for the first sheet
   useEffect(() => {
     if (
       editor &&
@@ -124,41 +127,69 @@ export function EditorComponent({
     ) {
       const firstSheet = sheets[0];
       const content = firstSheet.editorState?.content || [];
+      console.log("[INIT] Loading initial content for first sheet:", content);
       if (content.length > 0) {
         try {
           editor.insertBlocks(content, editor.document[0]);
+          console.log("[INIT] Successfully loaded initial content");
         } catch (e) {
-          console.error("Error loading initial content:", e);
+          console.error("[INIT] Error loading initial content:", e);
         }
+      } else {
+        console.log("[INIT] No initial content to load");
       }
       editorInstancesRef.current.set("initialized", true);
     }
   }, [editor]);
 
-  // Store editor instance reference
   useEffect(() => {
     if (editor && currentSheet) {
       editorInstancesRef.current.set(currentSheet.id, editor);
     }
   }, [editor, currentSheet?.id]);
 
-  // Initialize from currentStory
   useEffect(() => {
     if (currentStory) {
+      console.log("Loading story:", currentStory);
       if (currentStory.sheets && currentStory.sheets.length > 0) {
         const enhancedSheets: SheetWithEditorState[] = currentStory.sheets.map(
-          (sheet) => ({
-            ...sheet,
-            isSaved: true,
-            editorState: {
-              content:
-                (sheet as any).editorState?.content || sheet.content || [],
-              selection: (sheet as any).editorState?.selection || null,
-            },
-          })
+          (sheet) => {
+            const content =
+              (sheet as any).editorState?.content || sheet.content || [];
+            console.log(`Sheet ${sheet.id} content:`, content);
+            return {
+              ...sheet,
+              isSaved: true,
+              content: content,
+              editorState: {
+                content: content,
+                selection: (sheet as any).editorState?.selection || null,
+              },
+            };
+          }
         );
         setSheets(enhancedSheets);
         setCurrentSheetIndex(0);
+
+        if (editor && enhancedSheets[0]) {
+          setTimeout(() => {
+            const firstSheetContent =
+              enhancedSheets[0].editorState?.content || [];
+            console.log("Loading first sheet into editor:", firstSheetContent);
+            if (firstSheetContent.length > 0) {
+              try {
+                const currentBlocks = editor.document;
+                if (currentBlocks.length > 0) {
+                  editor.replaceBlocks(currentBlocks, firstSheetContent);
+                } else {
+                  editor.insertBlocks(firstSheetContent, editor.document[0]);
+                }
+              } catch (e) {
+                console.error("Error loading first sheet:", e);
+              }
+            }
+          }, 100);
+        }
       } else {
         const newSheets: SheetWithEditorState[] = [
           {
@@ -178,24 +209,33 @@ export function EditorComponent({
         setCurrentSheetIndex(0);
       }
     }
-  }, [currentStory?.id]);
+  }, [currentStory?.id, editor]);
 
-  // Restore current sheet content when sheet changes
   useEffect(() => {
     if (editor && currentSheet && !isSwitchingRef.current) {
       const content = currentSheet.editorState?.content || [];
+      console.log("[RESTORE] Attempting to restore sheet content:", {
+        sheetId: currentSheet.id,
+        contentLength: content.length,
+        content: content,
+      });
+
       if (JSON.stringify(editor.document) !== JSON.stringify(content)) {
+        console.log("[RESTORE] Content differs, updating editor");
         const currentBlocks = editor.document;
         if (currentBlocks.length > 0) {
           editor.replaceBlocks(currentBlocks, content);
+          console.log("[RESTORE] Replaced blocks");
         } else if (content.length > 0) {
           editor.insertBlocks(content, editor.document[0]);
+          console.log("[RESTORE] Inserted blocks");
         }
+      } else {
+        console.log("[RESTORE] Content is the same, no update needed");
       }
     }
   }, [currentSheetIndex, editor]);
 
-  // Calculate visible sheets
   useEffect(() => {
     const calculateVisibleSheets = () => {
       if (!containerRef.current) return;
@@ -225,22 +265,28 @@ export function EditorComponent({
     return () => window.removeEventListener("resize", calculateVisibleSheets);
   }, [sheets.length]);
 
-  // Track editor changes
   useEffect(() => {
     if (!editor) return;
 
     const unsubscribe = editor.onChange(() => {
-      if (isSwitchingRef.current) return;
+      if (isSwitchingRef.current) {
+        console.log("[CHANGE] Ignoring change - switching sheets");
+        return;
+      }
 
       setSheets((prev) => {
         const newSheets = [...prev];
         const currentSheetData = newSheets[currentSheetIndex];
 
-        // Update content and mark as unsaved
         if (
           JSON.stringify(currentSheetData.editorState?.content) !==
           JSON.stringify(editor.document)
         ) {
+          console.log("[CHANGE] Editor content changed:", {
+            sheetIndex: currentSheetIndex,
+            newContent: editor.document,
+          });
+
           newSheets[currentSheetIndex] = {
             ...currentSheetData,
             editorState: {
@@ -272,12 +318,18 @@ export function EditorComponent({
   const switchToSheet = (idx: number) => {
     if (idx === currentSheetIndex) return;
 
+    console.log("[SWITCH] Starting switch from", currentSheetIndex, "to", idx);
     isSwitchingRef.current = true;
 
-    // Save current sheet state first
     if (editor) {
       const currentContent = editor.document;
       const currentSelection = editor.getSelection();
+
+      console.log("[SWITCH] Saving current sheet state:", {
+        sheetIndex: currentSheetIndex,
+        contentLength: currentContent.length,
+        content: currentContent,
+      });
 
       setSheets((prev) => {
         const newSheets = [...prev];
@@ -289,15 +341,14 @@ export function EditorComponent({
           },
           content: currentContent,
         };
+        console.log("[SWITCH] Updated sheets state:", newSheets);
         return newSheets;
       });
     }
 
-    // Wait for state update, then switch and restore
     setTimeout(() => {
       setCurrentSheetIndex(idx);
 
-      // Restore new sheet content
       setTimeout(() => {
         if (editor) {
           setSheets((currentSheets) => {
@@ -305,21 +356,26 @@ export function EditorComponent({
             const content = targetSheet.editorState?.content || [];
             const currentBlocks = editor.document;
 
-            // Replace all blocks at once
+            console.log("[SWITCH] Restoring target sheet:", {
+              targetIndex: idx,
+              contentLength: content.length,
+              content: content,
+            });
+
             try {
               if (content.length > 0) {
                 editor.replaceBlocks(currentBlocks, content);
+                console.log("[SWITCH] Replaced blocks successfully");
               } else {
-                // Empty content - just clear
                 if (currentBlocks.length > 0) {
                   editor.removeBlocks(currentBlocks);
+                  console.log("[SWITCH] Cleared editor for empty sheet");
                 }
               }
             } catch (e) {
-              console.error("Error loading sheet content:", e);
+              console.error("[SWITCH] Error loading sheet content:", e);
             }
 
-            // Restore selection if exists
             if (targetSheet.editorState?.selection) {
               try {
                 const savedSelection = targetSheet.editorState.selection;
@@ -327,7 +383,7 @@ export function EditorComponent({
                   editor.setTextCursorPosition(savedSelection.blocks[0]);
                 }
               } catch (e) {
-                // Selection might not be valid anymore
+                console.log("[SWITCH] Could not restore selection");
               }
             }
 
@@ -335,25 +391,45 @@ export function EditorComponent({
           });
         }
         isSwitchingRef.current = false;
+        console.log("[SWITCH] Switch complete");
       }, 50);
     }, 50);
   };
 
   const handleSave = () => {
-    // Save current editor state
-    const updatedSheets = sheets.map((sheet, idx) =>
-      idx === currentSheetIndex
-        ? {
-            ...sheet,
-            content: editor.document,
-            editorState: {
-              content: editor.document,
-              selection: editor.getSelection(),
-            },
-            isSaved: true,
-          }
-        : { ...sheet, isSaved: true }
-    );
+    const currentEditorContent = editor.document;
+    console.log("Current editor content:", currentEditorContent);
+
+    const updatedSheets = sheets.map((sheet, idx) => {
+      if (idx === currentSheetIndex) {
+        const updated = {
+          ...sheet,
+          content: currentEditorContent,
+          editorState: {
+            content: currentEditorContent,
+            selection: editor.getSelection(),
+          },
+          isSaved: true,
+        };
+        console.log(`Saving current sheet ${idx}:`, updated);
+        return updated;
+      } else {
+        const preserved = {
+          ...sheet,
+
+          content: sheet.content || sheet.editorState?.content || [],
+          editorState: sheet.editorState || {
+            content: sheet.content || [],
+            selection: null,
+          },
+          isSaved: true,
+        };
+        console.log(`Preserving sheet ${idx}:`, preserved);
+        return preserved;
+      }
+    });
+
+    console.log("All updated sheets:", updatedSheets);
     setSheets(updatedSheets);
 
     const firstSheet = updatedSheets[0];
@@ -371,6 +447,8 @@ export function EditorComponent({
       createdAt: currentStory?.createdAt || Date.now(),
       updatedAt: Date.now(),
     };
+
+    console.log("Saving story:", story);
     onSave(story);
     toast("Story saved successfully!");
   };
@@ -386,7 +464,6 @@ export function EditorComponent({
   };
 
   const handleAddSheet = () => {
-    // Save current sheet state before adding new one
     if (editor) {
       setSheets((prev) => {
         const newSheets = [...prev];
@@ -417,12 +494,10 @@ export function EditorComponent({
 
     setSheets((prev) => [...prev, newSheet]);
 
-    // Switch to new sheet and clear editor
     setTimeout(() => {
       const newIndex = sheets.length;
       setCurrentSheetIndex(newIndex);
 
-      // Clear editor content for new sheet
       if (editor && editor.document.length > 0) {
         editor.removeBlocks(editor.document);
       }
@@ -450,7 +525,6 @@ export function EditorComponent({
     setSheets(updatedSheets);
     setCurrentSheetIndex(newIndex);
 
-    // Load the content of the new current sheet
     setTimeout(() => {
       if (editor && updatedSheets[newIndex]) {
         const content = updatedSheets[newIndex].editorState?.content || [];
@@ -521,14 +595,12 @@ export function EditorComponent({
       return;
     }
 
-    // Reorder sheets
     const newSheets = [...sheets];
     const [draggedItem] = newSheets.splice(draggedSheet, 1);
     newSheets.splice(dropIdx, 0, draggedItem);
 
     setSheets(newSheets);
 
-    // Update current sheet index
     if (currentSheetIndex === draggedSheet) {
       setCurrentSheetIndex(dropIdx);
     } else if (
@@ -566,289 +638,304 @@ export function EditorComponent({
 
   return (
     <>
-      <div className="flex w-full bg-background text-foreground gap-8 p-4 min-h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] flex-1 px-8 overflow-x-hidden">
-        <div className="flex flex-col bg-[#171717] w-[75%] min-w-0 rounded-[46px] p-4 gap-4 overflow-hidden">
-          <div className="bg-background w-full flex-1 rounded-[46px] overflow-hidden">
-            <ScrollArea className="h-full w-full" ref={scrollAreaRef}>
-              <div className="p-4">
-                <BlockNoteView editor={editor} theme={darkRedTheme} />
+      <div className="bg-background gap-8 p-4 min-h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] px-8">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="min-h-[calc(100vh-5rem)] max-h-[calc(100vh-5rem)]"
+        >
+          <ResizablePanel defaultSize={75} minSize={70} className="min-w-0">
+            <div className="flex flex-col bg-[#171717] h-full rounded-[46px] p-4 gap-4 overflow-hidden">
+              <div className="bg-background flex-1 py-5 rounded-[46px] overflow-hidden">
+                <ScrollArea>
+                  <BlockNoteView editor={editor} theme={darkRedTheme} />
+                </ScrollArea>
               </div>
-            </ScrollArea>
-          </div>
-
-          <div className="w-full overflow-hidden px-8 pb-2" ref={containerRef}>
-            <div className="flex items-center gap-2 justify-center">
-              {visibleSheets.map((idx) =>
-                sheets[idx] ? (
-                  <ContextMenu key={sheets[idx].id}>
-                    <ContextMenuTrigger>
-                      {editingSheetIndex === idx ? (
-                        <div className="relative p-4 rounded-2xl bg-primary">
-                          <input
-                            type="text"
-                            value={editingSheetName}
-                            onChange={(e) =>
-                              setEditingSheetName(e.target.value)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleSaveSheetName();
-                              } else if (e.key === "Escape") {
-                                handleCancelRename();
-                              }
-                            }}
-                            onBlur={handleSaveSheetName}
-                            autoFocus
-                            className="w-32 bg-transparent border-none outline-none text-primary-foreground font-semibold text-center"
-                          />
-                        </div>
-                      ) : (
-                        <div
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, idx)}
-                          onDragOver={(e) => handleDragOver(e, idx)}
-                          onDragLeave={handleDragLeave}
-                          onDrop={(e) => handleDrop(e, idx)}
-                          onDragEnd={handleDragEnd}
-                          className={`relative flex items-center gap-1 ${
-                            dragOverSheet === idx && draggedSheet !== idx
-                              ? "opacity-50"
-                              : ""
-                          }`}
-                        >
-                          <div className="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded">
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <Button
-                            variant={
-                              idx === currentSheetIndex ? "default" : "outline"
-                            }
-                            className={`relative p-4 rounded-2xl transition-all ${
-                              idx === currentSheetIndex
-                                ? "bg-primary text-primary-foreground shadow-lg scale-105"
-                                : "bg-background hover:bg-accent"
-                            }`}
-                            onClick={() => switchToSheet(idx)}
-                            onDoubleClick={() => handleRenameSheet(idx)}
-                          >
-                            <span className="font-semibold">
-                              {sheets[idx].title || `Sheet ${idx + 1}`}
-                            </span>
-                            {!sheets[idx].isSaved && (
-                              <span className="absolute -top-1 -right-1 h-3 w-3 bg-yellow-500 rounded-full border-2 border-background" />
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem onClick={() => switchToSheet(idx)}>
-                        Select Sheet
-                      </ContextMenuItem>
-                      <ContextMenuItem onClick={() => handleRenameSheet(idx)}>
-                        Rename Sheet
-                      </ContextMenuItem>
-                      <ContextMenuItem
-                        onClick={() => {
-                          setSheetToDelete(sheets[idx].id);
-                          setShowDeleteDialog(true);
-                        }}
-                        className="text-destructive"
-                      >
-                        Delete Sheet
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ) : null
-              )}
-
-              {overflowSheets.some((idx) => sheets[idx]) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="p-4 rounded-2xl">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {overflowSheets.map((idx) =>
-                      sheets[idx] ? (
-                        <ContextMenu key={sheets[idx].id}>
-                          <ContextMenuTrigger>
-                            <DropdownMenuItem
-                              onClick={() => switchToSheet(idx)}
-                              className={
-                                idx === currentSheetIndex ? "bg-accent" : ""
-                              }
-                              onSelect={(e) => e.preventDefault()}
-                            >
-                              <span className="flex items-center gap-2">
-                                {sheets[idx].title || `Sheet ${idx + 1}`}
-                                {!sheets[idx].isSaved && (
-                                  <span className="h-2 w-2 bg-yellow-500 rounded-full" />
-                                )}
-                              </span>
-                            </DropdownMenuItem>
-                          </ContextMenuTrigger>
-                          <ContextMenuContent>
-                            <ContextMenuItem onClick={() => switchToSheet(idx)}>
-                              Select Sheet
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                              onClick={() => handleRenameSheet(idx)}
-                            >
-                              Rename Sheet
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                              onClick={() => {
-                                setSheetToDelete(sheets[idx].id);
-                                setShowDeleteDialog(true);
-                              }}
-                              className="text-destructive"
-                            >
-                              Delete Sheet
-                            </ContextMenuItem>
-                          </ContextMenuContent>
-                        </ContextMenu>
-                      ) : null
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-
-              <Button
-                variant="outline"
-                className="p-4 rounded-2xl"
-                onClick={handleAddSheet}
+              <div
+                className="w-full overflow-hidden px-8 pb-2"
+                ref={containerRef}
               >
-                <Plus style={{ height: "18px", width: "auto" }} />
-              </Button>
-            </div>
-          </div>
-        </div>
+                <div className="flex items-center gap-2 justify-center">
+                  {visibleSheets.map((idx) =>
+                    sheets[idx] ? (
+                      <ContextMenu key={sheets[idx].id}>
+                        <ContextMenuTrigger>
+                          {editingSheetIndex === idx ? (
+                            <div className="relative p-4 rounded-2xl bg-primary">
+                              <input
+                                type="text"
+                                value={editingSheetName}
+                                onChange={(e) =>
+                                  setEditingSheetName(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleSaveSheetName();
+                                  } else if (e.key === "Escape") {
+                                    handleCancelRename();
+                                  }
+                                }}
+                                onBlur={handleSaveSheetName}
+                                autoFocus
+                                className="w-32 bg-transparent border-none outline-none text-primary-foreground font-semibold text-center"
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, idx)}
+                              onDragOver={(e) => handleDragOver(e, idx)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, idx)}
+                              onDragEnd={handleDragEnd}
+                              className={`relative flex items-center gap-1 ${
+                                dragOverSheet === idx && draggedSheet !== idx
+                                  ? "opacity-50"
+                                  : ""
+                              }`}
+                            >
+                              <div className="cursor-grab active:cursor-grabbing p-1 hover:bg-accent/50 rounded">
+                                <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <Button
+                                variant={
+                                  idx === currentSheetIndex
+                                    ? "default"
+                                    : "outline"
+                                }
+                                className={`relative p-4 rounded-2xl transition-all ${
+                                  idx === currentSheetIndex
+                                    ? "bg-primary text-primary-foreground shadow-lg scale-105"
+                                    : "bg-background hover:bg-accent"
+                                }`}
+                                onClick={() => switchToSheet(idx)}
+                                onDoubleClick={() => handleRenameSheet(idx)}
+                              >
+                                <span className="font-semibold">
+                                  {sheets[idx].title || `Sheet ${idx + 1}`}
+                                </span>
+                                {!sheets[idx].isSaved && (
+                                  <span className="absolute -top-1 -right-1 h-3 w-3 bg-yellow-500 rounded-full border-2 border-background" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem onClick={() => switchToSheet(idx)}>
+                            Select Sheet
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onClick={() => handleRenameSheet(idx)}
+                          >
+                            Rename Sheet
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onClick={() => {
+                              setSheetToDelete(sheets[idx].id);
+                              setShowDeleteDialog(true);
+                            }}
+                            className="text-destructive"
+                          >
+                            Delete Sheet
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    ) : null
+                  )}
 
-        <div className="flex flex-col w-[25%] justify-between py-4">
-          <div className="flex flex-col gap-8">
-            <div className="flex flex-col gap-6 shrink-0 border-b pb-8">
-              <div className="flex items-center justify-center">
-                <input
-                  type="text"
-                  placeholder="Title"
-                  className="scroll-m-20 text-4xl font-bold tracking-tight bg-transparent border-none outline-none flex-1 w-12"
-                  value={currentSheet.title}
-                  onChange={(e) =>
-                    updateCurrentSheet({ title: e.target.value })
-                  }
-                />
-                <Tooltip>
-                  <TooltipTrigger>
-                    {currentSheet.isSaved ? (
-                      <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0" />
-                    ) : (
-                      <Circle className="h-6 w-6 text-yellow-500 shrink-0" />
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {currentSheet.isSaved
-                      ? "All changes saved"
-                      : "Unsaved changes"}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <input
-                type="text"
-                placeholder="Subtitle"
-                className="text-muted-foreground text-xl font-semibold tracking-tight bg-transparent border-none outline-none"
-                value={currentSheet.subtitle}
-                onChange={(e) =>
-                  updateCurrentSheet({ subtitle: e.target.value })
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <p className="font-semibold text-lg">Cover Image</p>
-              <div className="relative group rounded-4xl overflow-hidden bg-muted aspect-video flex items-center justify-center">
-                <Image
-                  src={"/assets/cover-image.png"}
-                  alt="cover-image"
-                  width={350}
-                  height={300}
-                  style={{ width: "100%", height: "100%" }}
-                />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                  {overflowSheets.some((idx) => sheets[idx]) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="p-4 rounded-2xl">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {overflowSheets.map((idx) =>
+                          sheets[idx] ? (
+                            <ContextMenu key={sheets[idx].id}>
+                              <ContextMenuTrigger>
+                                <DropdownMenuItem
+                                  onClick={() => switchToSheet(idx)}
+                                  className={
+                                    idx === currentSheetIndex ? "bg-accent" : ""
+                                  }
+                                  onSelect={(e) => e.preventDefault()}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    {sheets[idx].title || `Sheet ${idx + 1}`}
+                                    {!sheets[idx].isSaved && (
+                                      <span className="h-2 w-2 bg-yellow-500 rounded-full" />
+                                    )}
+                                  </span>
+                                </DropdownMenuItem>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent>
+                                <ContextMenuItem
+                                  onClick={() => switchToSheet(idx)}
+                                >
+                                  Select Sheet
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                  onClick={() => handleRenameSheet(idx)}
+                                >
+                                  Rename Sheet
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                  onClick={() => {
+                                    setSheetToDelete(sheets[idx].id);
+                                    setShowDeleteDialog(true);
+                                  }}
+                                  className="text-destructive"
+                                >
+                                  Delete Sheet
+                                </ContextMenuItem>
+                              </ContextMenuContent>
+                            </ContextMenu>
+                          ) : null
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+
                   <Button
-                    variant="secondary"
-                    className="gap-2"
-                    onClick={handleImageUpload}
+                    variant="outline"
+                    className="p-4 rounded-2xl"
+                    onClick={handleAddSheet}
                   >
-                    <Upload className="h-4 w-4" />
-                    Change Image
+                    <Plus style={{ height: "18px", width: "auto" }} />
                   </Button>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col gap-2 relative">
-              <div className="border-2 rounded-4xl w-full h-full p-2">
-                <p className="absolute -top-3 left-3.5 bg-background w-18 text-center text-lg font-semibold">
-                  Tags
-                </p>
-                <TagsInput
-                  value={currentSheet.tags}
-                  onValueChange={(newTags) =>
-                    updateCurrentSheet({ tags: newTags })
-                  }
-                  editable
-                  addOnPaste
-                  className="mt-4 w-full"
-                >
-                  <TagsInputList className="border-0 focus-within:ring-0 gap-3 w-full">
-                    {currentSheet.tags.map((tag) => (
-                      <TagsInputItem
-                        key={tag}
-                        value={tag}
-                        className="text-[16px] bg-accent/40 px-4 py-2 rounded-full"
-                      >
-                        {tag}
-                      </TagsInputItem>
-                    ))}
-                    <TagsInputInput
-                      placeholder="Add tag..."
-                      className="text-lg"
+          </ResizablePanel>
+          <ResizableHandle className="w-2 mx-2 my-6 rounded-full bg-transparent" />
+          <ResizablePanel defaultSize={25} minSize={20}>
+            <div className="flex flex-col max-w-full h-full justify-between py-4">
+              <div className="flex flex-col gap-8">
+                <div className="flex flex-col gap-6 shrink-0 border-b pb-8">
+                  <div className="flex items-center justify-center">
+                    <input
+                      type="text"
+                      placeholder="Title"
+                      className="scroll-m-20 text-4xl font-bold tracking-tight bg-transparent border-none outline-none flex-1 w-12"
+                      value={currentSheet.title}
+                      onChange={(e) =>
+                        updateCurrentSheet({ title: e.target.value })
+                      }
                     />
-                  </TagsInputList>
-                </TagsInput>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        {currentSheet.isSaved ? (
+                          <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0" />
+                        ) : (
+                          <Circle className="h-6 w-6 text-yellow-500 shrink-0" />
+                        )}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {currentSheet.isSaved
+                          ? "All changes saved"
+                          : "Unsaved changes"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Subtitle"
+                    className="text-muted-foreground text-xl font-semibold tracking-tight bg-transparent border-none outline-none"
+                    value={currentSheet.subtitle}
+                    onChange={(e) =>
+                      updateCurrentSheet({ subtitle: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <p className="font-semibold text-lg">Cover Image</p>
+                  <div className="relative group rounded-4xl overflow-hidden bg-muted aspect-video flex items-center justify-center">
+                    <Image
+                      src={"/assets/cover-image.png"}
+                      alt="cover-image"
+                      width={350}
+                      height={300}
+                      style={{ width: "100%", height: "100%" }}
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                      <Button
+                        variant="secondary"
+                        className="gap-2"
+                        onClick={handleImageUpload}
+                      >
+                        <Upload className="h-4 w-4" />
+                        Change Image
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 relative">
+                  <div className="border-2 rounded-4xl w-full h-full p-2">
+                    <p className="absolute -top-3 left-3.5 bg-background w-18 text-center text-lg font-semibold">
+                      Tags
+                    </p>
+                    <TagsInput
+                      value={currentSheet.tags}
+                      onValueChange={(newTags) =>
+                        updateCurrentSheet({ tags: newTags })
+                      }
+                      editable
+                      addOnPaste
+                      className="mt-4 w-full"
+                    >
+                      <TagsInputList className="border-0 focus-within:ring-0 gap-3 w-full">
+                        {currentSheet.tags.map((tag) => (
+                          <TagsInputItem
+                            key={tag}
+                            value={tag}
+                            className="text-[16px] bg-accent/40 px-4 py-2 rounded-full"
+                          >
+                            {tag}
+                          </TagsInputItem>
+                        ))}
+                        <TagsInputInput
+                          placeholder="Add tag..."
+                          className="text-lg"
+                        />
+                      </TagsInputList>
+                    </TagsInput>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between w-full gap-3">
+                <Tooltip>
+                  <TooltipTrigger className="w-full">
+                    <Button className="w-full gap-2" onClick={handleSave}>
+                      <Save className="h-4 w-4" />
+                      Save Story
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Save your story</TooltipContent>
+                </Tooltip>
+                {currentStory && (
+                  <Tooltip>
+                    <TooltipTrigger className="w-full">
+                      <Button
+                        variant={"destructive"}
+                        className="w-full gap-2"
+                        onClick={() => {
+                          setSheetToDelete(null);
+                          setShowDeleteDialog(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Story
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete this story</TooltipContent>
+                  </Tooltip>
+                )}
               </div>
             </div>
-          </div>
-          <div className="flex items-center justify-between w-full gap-3">
-            <Tooltip>
-              <TooltipTrigger className="w-full">
-                <Button className="w-full gap-2" onClick={handleSave}>
-                  <Save className="h-4 w-4" />
-                  Save Story
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Save your story</TooltipContent>
-            </Tooltip>
-            {currentStory && (
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <Button
-                    variant={"destructive"}
-                    className="w-full gap-2"
-                    onClick={() => {
-                      setSheetToDelete(null);
-                      setShowDeleteDialog(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Story
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Delete this story</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

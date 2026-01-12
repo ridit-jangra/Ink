@@ -18,3 +18,14 @@ export interface Story {
   createdAt: number;
   updatedAt: number;
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  gender: "Female" | "Male";
+  isVerified?: boolean; // ← NEW
+  otp?: string; // ← NEW
+  otpExpiry?: Date; // ← NEW
+}

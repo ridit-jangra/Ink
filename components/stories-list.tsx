@@ -47,7 +47,7 @@ export function StoriesList({
 }: {
   stories: Story[];
   onSelectStory: (story: Story) => void;
-  onDeleteStory?: (id: string) => void;
+  onDeleteStory: (id: string) => void;
 }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [storyToDelete, setStoryToDelete] = useState<Story | null>(null);

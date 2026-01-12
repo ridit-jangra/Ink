@@ -144,3 +144,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+.bn-container,
+.bn-editor {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+}
+
+.bn-block-content {
+  max-width: 100% !important;
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+}
