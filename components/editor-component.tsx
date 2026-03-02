@@ -56,6 +56,8 @@ import {
   GripVertical,
   Expand,
   ListCollapse,
+  Minimize,
+  Maximize,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, Story } from "@/lib/types";
@@ -703,10 +705,12 @@ export function EditorComponent({
                       onClick={() => setIsFullscreen((v) => !v)}
                       className="rounded-full"
                     >
-                      {isFullscreen ? <ListCollapse /> : <Expand />}
+                      {isFullscreen ? <Minimize /> : <Maximize />}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Enter Full-Screen</TooltipContent>
+                  <TooltipContent>
+                    {isFullscreen ? "Exit Full-Screen" : "Enter Full-Screen"}
+                  </TooltipContent>
                 </Tooltip>
               </div>
               <div
