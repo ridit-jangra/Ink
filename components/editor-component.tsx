@@ -60,6 +60,7 @@ import {
 import { toast } from "sonner";
 import { Sheet, Story } from "@/lib/types";
 import Image from "next/image";
+import { cn } from "@/lib/utils";
 
 const darkRedTheme = {
   colors: {
@@ -651,12 +652,17 @@ export function EditorComponent({
 
   return (
     <>
-      <div className="bg-background gap-8 p-4 min-h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] px-8">
+      <div
+        className={cn(
+          "bg-background gap-8 min-h-full",
+          isFullscreen ? "max-h-screen" : "px-8 p-4 max-h-[calc(100vh-4rem)]",
+        )}
+      >
         <ResizablePanelGroup
           direction="horizontal"
           className={`min-h-[calc(100vh-5rem)] max-h-[calc(100vh-5rem)] ${
             isFullscreen
-              ? "inset-0 z-50 fixed bg-background p-4 max-h-screen"
+              ? "inset-0 z-50 w-screen fixed bg-background p-2 max-h-screen"
               : ""
           }`}
         >
@@ -665,13 +671,30 @@ export function EditorComponent({
             minSize={70}
             className="min-w-0 relative"
           >
-            <div className="flex flex-col bg-[#171717] h-full rounded-[46px] p-4 gap-4 overflow-hidden">
-              <div className="bg-background flex-1 py-5 rounded-[46px] overflow-hidden">
+            <div
+              className={
+                isFullscreen
+                  ? "flex flex-col bg-[#171717] h-full p-2 rounded-[46px] overflow-hidden"
+                  : "flex flex-col bg-[#171717] h-full rounded-[46px] p-4 gap-4 overflow-hidden"
+              }
+            >
+              <div
+                className={
+                  isFullscreen
+                    ? "bg-background flex-1 rounded-[46px] overflow-hidden"
+                    : "bg-background flex-1 py-5 rounded-[46px] overflow-hidden"
+                }
+              >
                 <ScrollArea>
                   <BlockNoteView editor={editor} theme={darkRedTheme} />
                 </ScrollArea>
               </div>
-              <div className="flex justify-baseline absolute bottom-5 right-5">
+              <div
+                className={cn(
+                  "flex justify-baseline absolute right-5",
+                  isFullscreen ? "bottom-2" : "bottom-5",
+                )}
+              >
                 <Tooltip>
                   <TooltipTrigger>
                     <Button
@@ -687,7 +710,10 @@ export function EditorComponent({
                 </Tooltip>
               </div>
               <div
-                className="w-full overflow-hidden px-8 pb-2"
+                className={cn(
+                  "w-full overflow-hidden px-8",
+                  isFullscreen ? "pb-0" : "pb-2",
+                )}
                 ref={containerRef}
               >
                 <div className="flex items-center gap-2 justify-center self-center">
@@ -845,7 +871,9 @@ export function EditorComponent({
               </div>
             </div>
           </ResizablePanel>
-          <ResizableHandle className="w-2 mx-2 my-6 rounded-full bg-transparent" />
+          {!isFullscreen && (
+            <ResizableHandle className="w-2 mx-2 my-6 rounded-full bg-transparent" />
+          )}
           {!isFullscreen && (
             <ResizablePanel defaultSize={25} minSize={20}>
               <div className="flex flex-col max-w-full h-full justify-between py-4">
