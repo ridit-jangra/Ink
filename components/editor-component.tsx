@@ -54,6 +54,8 @@ import {
   Plus,
   MoreHorizontal,
   GripVertical,
+  Expand,
+  ListCollapse,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, Story } from "@/lib/types";
@@ -83,6 +85,7 @@ export function EditorComponent({
   onSave: (story: Story) => void;
   onDelete: (id: string) => void;
 }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [sheets, setSheets] = useState<SheetWithEditorState[]>([
     {
       id: "sheet_1",
@@ -103,7 +106,7 @@ export function EditorComponent({
   const [visibleSheets, setVisibleSheets] = useState<number[]>([]);
   const [overflowSheets, setOverflowSheets] = useState<number[]>([]);
   const [editingSheetIndex, setEditingSheetIndex] = useState<number | null>(
-    null
+    null,
   );
   const [editingSheetName, setEditingSheetName] = useState<string>("");
   const [draggedSheet, setDraggedSheet] = useState<number | null>(null);
@@ -165,7 +168,7 @@ export function EditorComponent({
                 selection: (sheet as any).editorState?.selection || null,
               },
             };
-          }
+          },
         );
         setSheets(enhancedSheets);
         setCurrentSheetIndex(0);
@@ -309,8 +312,8 @@ export function EditorComponent({
       prev.map((sheet, idx) =>
         idx === currentSheetIndex
           ? { ...sheet, ...updates, isSaved: false }
-          : sheet
-      )
+          : sheet,
+      ),
     );
   };
 
@@ -540,6 +543,17 @@ export function EditorComponent({
     toast.success("Sheet deleted");
   };
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isFullscreen]);
+
   const handleImageUpload = () => {
     toast.info("Image upload coming soon!", {
       description: "This feature will be available in the next update.",
@@ -557,8 +571,8 @@ export function EditorComponent({
         prev.map((sheet, idx) =>
           idx === editingSheetIndex
             ? { ...sheet, title: editingSheetName, isSaved: false }
-            : sheet
-        )
+            : sheet,
+        ),
       );
       setEditingSheetIndex(null);
       setEditingSheetName("");
@@ -640,20 +654,43 @@ export function EditorComponent({
       <div className="bg-background gap-8 p-4 min-h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] px-8">
         <ResizablePanelGroup
           direction="horizontal"
-          className="min-h-[calc(100vh-5rem)] max-h-[calc(100vh-5rem)]"
+          className={`min-h-[calc(100vh-5rem)] max-h-[calc(100vh-5rem)] ${
+            isFullscreen
+              ? "inset-0 z-50 fixed bg-background p-4 max-h-screen"
+              : ""
+          }`}
         >
-          <ResizablePanel defaultSize={75} minSize={70} className="min-w-0">
+          <ResizablePanel
+            defaultSize={75}
+            minSize={70}
+            className="min-w-0 relative"
+          >
             <div className="flex flex-col bg-[#171717] h-full rounded-[46px] p-4 gap-4 overflow-hidden">
               <div className="bg-background flex-1 py-5 rounded-[46px] overflow-hidden">
                 <ScrollArea>
                   <BlockNoteView editor={editor} theme={darkRedTheme} />
                 </ScrollArea>
               </div>
+              <div className="flex justify-baseline absolute bottom-5 right-5">
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsFullscreen((v) => !v)}
+                      className="rounded-full"
+                    >
+                      {isFullscreen ? <ListCollapse /> : <Expand />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Enter Full-Screen</TooltipContent>
+                </Tooltip>
+              </div>
               <div
                 className="w-full overflow-hidden px-8 pb-2"
                 ref={containerRef}
               >
-                <div className="flex items-center gap-2 justify-center">
+                <div className="flex items-center gap-2 justify-center self-center">
                   {visibleSheets.map((idx) =>
                     sheets[idx] ? (
                       <ContextMenu key={sheets[idx].id}>
@@ -739,7 +776,7 @@ export function EditorComponent({
                           </ContextMenuItem>
                         </ContextMenuContent>
                       </ContextMenu>
-                    ) : null
+                    ) : null,
                   )}
 
                   {overflowSheets.some((idx) => sheets[idx]) && (
@@ -791,7 +828,7 @@ export function EditorComponent({
                                 </ContextMenuItem>
                               </ContextMenuContent>
                             </ContextMenu>
-                          ) : null
+                          ) : null,
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -809,131 +846,133 @@ export function EditorComponent({
             </div>
           </ResizablePanel>
           <ResizableHandle className="w-2 mx-2 my-6 rounded-full bg-transparent" />
-          <ResizablePanel defaultSize={25} minSize={20}>
-            <div className="flex flex-col max-w-full h-full justify-between py-4">
-              <div className="flex flex-col gap-8">
-                <div className="flex flex-col gap-6 shrink-0 border-b pb-8">
-                  <div className="flex items-center justify-center">
+          {!isFullscreen && (
+            <ResizablePanel defaultSize={25} minSize={20}>
+              <div className="flex flex-col max-w-full h-full justify-between py-4">
+                <div className="flex flex-col gap-8">
+                  <div className="flex flex-col gap-6 shrink-0 border-b pb-8">
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="text"
+                        placeholder="Title"
+                        className="scroll-m-20 text-4xl font-bold tracking-tight bg-transparent border-none outline-none flex-1 w-12"
+                        value={currentSheet.title}
+                        onChange={(e) =>
+                          updateCurrentSheet({ title: e.target.value })
+                        }
+                      />
+                      <Tooltip>
+                        <TooltipTrigger>
+                          {currentSheet.isSaved ? (
+                            <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0" />
+                          ) : (
+                            <Circle className="h-6 w-6 text-yellow-500 shrink-0" />
+                          )}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {currentSheet.isSaved
+                            ? "All changes saved"
+                            : "Unsaved changes"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <input
                       type="text"
-                      placeholder="Title"
-                      className="scroll-m-20 text-4xl font-bold tracking-tight bg-transparent border-none outline-none flex-1 w-12"
-                      value={currentSheet.title}
+                      placeholder="Subtitle"
+                      className="text-muted-foreground text-xl font-semibold tracking-tight bg-transparent border-none outline-none"
+                      value={currentSheet.subtitle}
                       onChange={(e) =>
-                        updateCurrentSheet({ title: e.target.value })
+                        updateCurrentSheet({ subtitle: e.target.value })
                       }
                     />
-                    <Tooltip>
-                      <TooltipTrigger>
-                        {currentSheet.isSaved ? (
-                          <CheckCircle2 className="h-6 w-6 text-green-500 shrink-0" />
-                        ) : (
-                          <Circle className="h-6 w-6 text-yellow-500 shrink-0" />
-                        )}
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {currentSheet.isSaved
-                          ? "All changes saved"
-                          : "Unsaved changes"}
-                      </TooltipContent>
-                    </Tooltip>
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Subtitle"
-                    className="text-muted-foreground text-xl font-semibold tracking-tight bg-transparent border-none outline-none"
-                    value={currentSheet.subtitle}
-                    onChange={(e) =>
-                      updateCurrentSheet({ subtitle: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <p className="font-semibold text-lg">Cover Image</p>
-                  <div className="relative group rounded-4xl overflow-hidden bg-muted aspect-video flex items-center justify-center">
-                    <Image
-                      src={"/assets/cover-image.png"}
-                      alt="cover-image"
-                      width={350}
-                      height={300}
-                      style={{ width: "100%", height: "100%" }}
-                    />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                      <Button
-                        variant="secondary"
-                        className="gap-2"
-                        onClick={handleImageUpload}
+                  <div className="flex flex-col gap-2">
+                    <p className="font-semibold text-lg">Cover Image</p>
+                    <div className="relative group rounded-4xl overflow-hidden bg-muted aspect-video flex items-center justify-center">
+                      <Image
+                        src={"/assets/cover-image.png"}
+                        alt="cover-image"
+                        width={350}
+                        height={300}
+                        style={{ width: "100%", height: "100%" }}
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                        <Button
+                          variant="secondary"
+                          className="gap-2"
+                          onClick={handleImageUpload}
+                        >
+                          <Upload className="h-4 w-4" />
+                          Change Image
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 relative">
+                    <div className="border-2 rounded-4xl w-full h-full p-2">
+                      <p className="absolute -top-3 left-3.5 bg-background w-18 text-center text-lg font-semibold">
+                        Tags
+                      </p>
+                      <TagsInput
+                        value={currentSheet.tags}
+                        onValueChange={(newTags) =>
+                          updateCurrentSheet({ tags: newTags })
+                        }
+                        editable
+                        addOnPaste
+                        className="mt-4 w-full"
                       >
-                        <Upload className="h-4 w-4" />
-                        Change Image
-                      </Button>
+                        <TagsInputList className="border-0 focus-within:ring-0 gap-3 w-full">
+                          {currentSheet.tags.map((tag) => (
+                            <TagsInputItem
+                              key={tag}
+                              value={tag}
+                              className="text-[16px] bg-accent/40 px-4 py-2 rounded-full"
+                            >
+                              {tag}
+                            </TagsInputItem>
+                          ))}
+                          <TagsInputInput
+                            placeholder="Add tag..."
+                            className="text-lg"
+                          />
+                        </TagsInputList>
+                      </TagsInput>
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 relative">
-                  <div className="border-2 rounded-4xl w-full h-full p-2">
-                    <p className="absolute -top-3 left-3.5 bg-background w-18 text-center text-lg font-semibold">
-                      Tags
-                    </p>
-                    <TagsInput
-                      value={currentSheet.tags}
-                      onValueChange={(newTags) =>
-                        updateCurrentSheet({ tags: newTags })
-                      }
-                      editable
-                      addOnPaste
-                      className="mt-4 w-full"
-                    >
-                      <TagsInputList className="border-0 focus-within:ring-0 gap-3 w-full">
-                        {currentSheet.tags.map((tag) => (
-                          <TagsInputItem
-                            key={tag}
-                            value={tag}
-                            className="text-[16px] bg-accent/40 px-4 py-2 rounded-full"
-                          >
-                            {tag}
-                          </TagsInputItem>
-                        ))}
-                        <TagsInputInput
-                          placeholder="Add tag..."
-                          className="text-lg"
-                        />
-                      </TagsInputList>
-                    </TagsInput>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between w-full gap-3">
-                <Tooltip>
-                  <TooltipTrigger className="w-full">
-                    <Button className="w-full gap-2" onClick={handleSave}>
-                      <Save className="h-4 w-4" />
-                      Save Story
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Save your story</TooltipContent>
-                </Tooltip>
-                {currentStory && (
+                <div className="flex items-center justify-between w-full gap-3">
                   <Tooltip>
                     <TooltipTrigger className="w-full">
-                      <Button
-                        variant={"destructive"}
-                        className="w-full gap-2"
-                        onClick={() => {
-                          setSheetToDelete(null);
-                          setShowDeleteDialog(true);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete Story
+                      <Button className="w-full gap-2" onClick={handleSave}>
+                        <Save className="h-4 w-4" />
+                        Save Story
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Delete this story</TooltipContent>
+                    <TooltipContent>Save your story</TooltipContent>
                   </Tooltip>
-                )}
+                  {currentStory && (
+                    <Tooltip>
+                      <TooltipTrigger className="w-full">
+                        <Button
+                          variant={"destructive"}
+                          className="w-full gap-2"
+                          onClick={() => {
+                            setSheetToDelete(null);
+                            setShowDeleteDialog(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete Story
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Delete this story</TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
               </div>
-            </div>
-          </ResizablePanel>
+            </ResizablePanel>
+          )}
         </ResizablePanelGroup>
       </div>
 

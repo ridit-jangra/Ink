@@ -25,7 +25,7 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
-    {}
+    {},
   );
   const hasCheckedAuth = useRef(false);
 
@@ -74,6 +74,20 @@ export function LoginForm({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleGuestLogin = async () => {
+    setIsLoading(true);
+
+    try {
+      await AuthService.loginAsGuest();
+      toast.success("Logged in as Guest");
+      router.replace("/dashboard");
+    } catch (error: any) {
+      toast.error("Failed to login as guest");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,6 +181,18 @@ export function LoginForm({
                 {errors.password}
               </FieldDescription>
             )}
+          </Field>
+
+          <Field>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={handleGuestLogin}
+              disabled={isLoading}
+              className="w-full"
+            >
+              Continue as Guest
+            </Button>
           </Field>
 
           <Field>

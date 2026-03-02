@@ -4,8 +4,6 @@ import {
   setDoc,
   getDoc,
   deleteDoc,
-  collection,
-  getDocs,
 } from "firebase/firestore";
 import { app } from "./firebase";
 import { AuthService } from "./authService";
@@ -20,19 +18,20 @@ interface StorageValue<T> {
 }
 
 export class Storage {
-  private static async getUserId(): Promise<string> {
+  private static async getUser() {
     const user = await AuthService.getCurrentUser();
     if (!user) {
-      return Promise.reject("User not authenticated");
+      throw new Error("User not authenticated");
     }
-    return user.id;
+    return user;
   }
 
-  // Helper method to remove undefined values from objects
+  private static isLocalUser(email?: string | null) {
+    return !!email && email.endsWith("@ink.local");
+  }
+
   private static sanitizeData<T>(data: T): T {
-    if (data === null || data === undefined) {
-      return data;
-    }
+    if (data === null || data === undefined) return data;
 
     if (Array.isArray(data)) {
       return data.map((item) => this.sanitizeData(item)) as T;
@@ -51,15 +50,17 @@ export class Storage {
     return data;
   }
 
+  private static localKey(collectionName: string, userId: string, key: string) {
+    return `${collectionName}:${userId}:${key}`;
+  }
+
   static async setItem<T>(
     collectionName: string,
     key: StorageKey,
-    value: T
+    value: T,
   ): Promise<void> {
     try {
-      const studentId = await this.getUserId();
-
-      // Sanitize the data to remove undefined values
+      const user = await this.getUser();
       const sanitizedValue = this.sanitizeData(value);
 
       const storageValue: StorageValue<T> = {
@@ -67,9 +68,13 @@ export class Storage {
         timestamp: Date.now(),
       };
 
-      console.log("Storing sanitized data:", sanitizedValue);
+      if (this.isLocalUser(user.email)) {
+        const fullKey = this.localKey(collectionName, user.id, key);
+        localStorage.setItem(fullKey, JSON.stringify(storageValue));
+        return;
+      }
 
-      const docRef = doc(db, collectionName, studentId, "items", key);
+      const docRef = doc(db, collectionName, user.id, "items", key);
       await setDoc(docRef, storageValue);
     } catch (e) {
       console.error(`Error storing data in ${collectionName}:`, e);
@@ -80,11 +85,21 @@ export class Storage {
   static async getItem<T>(
     collectionName: string,
     key: StorageKey,
-    defaultValue?: T
+    defaultValue?: T,
   ): Promise<T | null> {
     try {
-      const userId = await this.getUserId();
-      const docRef = doc(db, collectionName, userId, "items", key);
+      const user = await this.getUser();
+
+      if (this.isLocalUser(user.email)) {
+        const fullKey = this.localKey(collectionName, user.id, key);
+        const raw = localStorage.getItem(fullKey);
+        if (!raw) return defaultValue ?? null;
+
+        const parsed = JSON.parse(raw) as StorageValue<T>;
+        return parsed.data;
+      }
+
+      const docRef = doc(db, collectionName, user.id, "items", key);
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
@@ -101,11 +116,18 @@ export class Storage {
 
   static async removeItem(
     collectionName: string,
-    key: StorageKey
+    key: StorageKey,
   ): Promise<void> {
     try {
-      const studentId = await this.getUserId();
-      const docRef = doc(db, collectionName, studentId, "items", key);
+      const user = await this.getUser();
+
+      if (this.isLocalUser(user.email)) {
+        const fullKey = this.localKey(collectionName, user.id, key);
+        localStorage.removeItem(fullKey);
+        return;
+      }
+
+      const docRef = doc(db, collectionName, user.id, "items", key);
       await deleteDoc(docRef);
     } catch (e) {
       console.error(`Error removing data from ${collectionName}:`, e);

@@ -34,7 +34,7 @@ export class AuthService {
     name: string,
     email: string,
     password: string,
-    gender: "Female" | "Male"
+    gender: "Female" | "Male",
   ): Promise<{ success: boolean; message: string }> {
     try {
       const collectionPath = "accounts/users/data";
@@ -60,7 +60,7 @@ export class AuthService {
 
       sessionStorage.setItem(
         this.PENDING_REGISTRATION_KEY,
-        JSON.stringify(pendingData)
+        JSON.stringify(pendingData),
       );
 
       try {
@@ -88,11 +88,11 @@ export class AuthService {
 
   static async verifyOTPAndCreateAccount(
     email: string,
-    otp: string
+    otp: string,
   ): Promise<User> {
     try {
       const pendingDataStr = sessionStorage.getItem(
-        this.PENDING_REGISTRATION_KEY
+        this.PENDING_REGISTRATION_KEY,
       );
 
       if (!pendingDataStr) {
@@ -144,7 +144,7 @@ export class AuthService {
 
   static async resendRegistrationOTP(email: string): Promise<string> {
     const pendingDataStr = sessionStorage.getItem(
-      this.PENDING_REGISTRATION_KEY
+      this.PENDING_REGISTRATION_KEY,
     );
 
     if (!pendingDataStr) {
@@ -165,7 +165,7 @@ export class AuthService {
 
     sessionStorage.setItem(
       this.PENDING_REGISTRATION_KEY,
-      JSON.stringify(pendingData)
+      JSON.stringify(pendingData),
     );
 
     await fetch("/api/otp/send", {
@@ -213,6 +213,35 @@ export class AuthService {
       return user;
     } catch (error) {
       console.error("Login error:", error);
+      throw error;
+    }
+  }
+
+  static async loginAsGuest(): Promise<User> {
+    try {
+      const collectionPath = "accounts/users/data";
+
+      const guestId = `guest_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+
+      const guestUser: User = {
+        id: guestId,
+        name: "Guest",
+        email: `guest_${guestId}@ink.local`,
+        password: "",
+        gender: "Female",
+        isVerified: true,
+      };
+
+      const userDocRef = doc(db, collectionPath, guestId);
+      await setDoc(userDocRef, guestUser);
+
+      localStorage.setItem(this.USER_ID_KEY, guestId);
+
+      return guestUser;
+    } catch (error) {
+      console.error("Guest login error:", error);
       throw error;
     }
   }
@@ -274,7 +303,7 @@ export class AuthService {
 
   static getPendingRegistrationEmail(): string | null {
     const pendingDataStr = sessionStorage.getItem(
-      this.PENDING_REGISTRATION_KEY
+      this.PENDING_REGISTRATION_KEY,
     );
     if (!pendingDataStr) return null;
 
